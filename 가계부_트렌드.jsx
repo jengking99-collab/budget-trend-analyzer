@@ -176,8 +176,9 @@ export default function App() {
     setSelectedCats(p => p.includes(cat) ? p.filter(c => c !== cat) : [...p, cat]);
 
   const applyYMax = () => {
-    const v = Number(yMaxInput.replace(/,/g, ""));
-    setYMax(v > 0 ? v : null);
+    const raw = String(yMaxInput).replace(/,/g, "").trim();
+    const v = raw === "" ? 0 : Number(raw);
+    setYMax(!isNaN(v) && v > 0 ? v : null);
   };
 
   /* ──────────── UI ──────────── */
@@ -566,7 +567,8 @@ export default function App() {
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={fmtAmt}
-                  domain={yMax ? [0, yMax] : ["auto", "auto"]}
+                  domain={yMax ? [0, yMax] : [0, "auto"]}
+                  allowDataOverflow={!!yMax}
                   width={52}
                 />
                 <Tooltip content={<CustomTooltip />} />
