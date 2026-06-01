@@ -62,6 +62,7 @@ function CustomTooltip({ active, payload, label }) {
 export default function App() {
   const [transactions, setTransactions] = useState(null);
   const [allCategories, setAllCategories] = useState([]);
+  const [catsByType, setCatsByType] = useState({ 지출: [], 수입: [] });
   const [selectedCats, setSelectedCats] = useState([]);
   const [startMonth, setStartMonth] = useState("");
   const [endMonth,   setEndMonth]   = useState("");
@@ -88,7 +89,8 @@ export default function App() {
       const iType   = idx("수입/지출");
 
       const parsed = [];
-      const catSet = new Set();
+      const expendSet = new Set();
+      const incomeSet = new Set();
 
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
@@ -98,23 +100,26 @@ export default function App() {
         const cat  = row[iCat] || "기타";
         const amt  = Number(row[iAmt]) || 0;
         const type = row[iType] || "";
-        catSet.add(cat);
+        if (type === "수입") incomeSet.add(cat);
+        else expendSet.add(cat);
         parsed.push({ ym, cat, amt, type });
       }
 
-      const cats = Array.from(catSet).sort();
+      const expendCats = Array.from(expendSet).sort();
+      const incomeCats = Array.from(incomeSet).sort();
+      const cats = [...expendCats, ...incomeCats.filter(c => !expendSet.has(c))];
       const yms  = parsed.map(t => t.ym).sort();
 
       setTransactions(parsed);
       setAllCategories(cats);
-      // 기본 선택: 상위 5개 카테고리 (금액 합 기준)
+      setCatsByType({ 지출: expendCats, 수입: incomeCats });
+      // 기본 선택: 지출 카테고리 중 상위 5개 (금액 합 기준)
       const catTotals = {};
       parsed.forEach(t => { catTotals[t.cat] = (catTotals[t.cat] || 0) + t.amt; });
-      const top5 = [...cats].sort((a,b) => (catTotals[b]||0) - (catTotals[a]||0)).slice(0, 5);
+      const top5 = [...expendCats].sort((a,b) => (catTotals[b]||0) - (catTotals[a]||0)).slice(0, 5);
       setSelectedCats(top5);
       setStartMonth(yms[0] || "");
       setEndMonth(yms[yms.length - 1] || "");
-      setAllCategories(cats.sort());
     };
     reader.readAsBinaryString(file);
   }, []);
@@ -264,7 +269,7 @@ export default function App() {
             fontSize: 11, fontWeight: 700, color: "#334155",
             border: "1px solid #1e3a5f", borderRadius: 6,
             padding: "2px 7px", marginLeft: 4
-          }}>v1.1</span>
+          }}>v1.2</span>
         </div>
         <button
           onClick={() => { setTransactions(null); setAllCategories([]); }}
@@ -408,47 +413,92 @@ export default function App() {
             <div style={{ display: "flex", gap: 6 }}>
               <button
                 onClick={() => setSelectedCats([...allCategories])}
-                style={{
-                  padding: "4px 10px", borderRadius: 6, cursor: "pointer",
-                  background: "#0c2d47", color: "#38bdf8",
-                  border: "1px solid #1e3a5f", fontSize: 11
-                }}
+                style={{ padding: "4px 10px", borderRadius: 6, cursor: "pointer", background: "#0c2d47", color: "#38bdf8", border: "1px solid #1e3a5f", fontSize: 11 }}
               >전체 선택</button>
               <button
                 onClick={() => setSelectedCats([])}
-                style={{
-                  padding: "4px 10px", borderRadius: 6, cursor: "pointer",
-                  background: "#1a0a0a", color: "#f87171",
-                  border: "1px solid #3f1414", fontSize: 11
-                }}
+                style={{ padding: "4px 10px", borderRadius: 6, cursor: "pointer", background: "#1a0a0a", color: "#f87171", border: "1px solid #3f1414", fontSize: 11 }}
               >전체 해제</button>
             </div>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-            {allCategories.map((cat) => {
-              const colorIdx = allCategories.indexOf(cat) % PALETTE.length;
-              const color = PALETTE[colorIdx];
-              const sel = selectedCats.includes(cat);
-              return (
+
+          {/* 지출 카테고리 그룹 */}
+          {catsByType.지출.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#f87171", letterSpacing: "0.06em" }}>💸 지출</span>
+                <div style={{ flex: 1, height: 1, background: "#1e3a5f" }} />
                 <button
-                  key={cat}
-                  onClick={() => toggleCat(cat)}
-                  style={{
-                    padding: "5px 13px", borderRadius: 20, cursor: "pointer",
-                    border: `1.5px solid ${sel ? color : "#1e3a5f"}`,
-                    background: sel ? `${color}18` : "transparent",
-                    color: sel ? color : "#334155",
-                    fontSize: 12, fontWeight: sel ? 700 : 400,
-                    transition: "all 0.15s",
-                    boxShadow: sel ? `0 0 8px ${color}33` : "none"
-                  }}
-                >
-                  {sel && <span style={{ marginRight: 4, fontSize: 9 }}>●</span>}
-                  {cat}
-                </button>
-              );
-            })}
-          </div>
+                  onClick={() => setSelectedCats(p => [...new Set([...p, ...catsByType.지출])])}
+                  style={{ padding: "2px 8px", borderRadius: 5, cursor: "pointer", background: "transparent", color: "#475569", border: "1px solid #1e3a5f", fontSize: 10 }}
+                >전체 선택</button>
+                <button
+                  onClick={() => setSelectedCats(p => p.filter(c => !catsByType.지출.includes(c)))}
+                  style={{ padding: "2px 8px", borderRadius: 5, cursor: "pointer", background: "transparent", color: "#475569", border: "1px solid #1e3a5f", fontSize: 10 }}
+                >전체 해제</button>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                {catsByType.지출.map((cat) => {
+                  const colorIdx = allCategories.indexOf(cat) % PALETTE.length;
+                  const color = PALETTE[colorIdx];
+                  const sel = selectedCats.includes(cat);
+                  return (
+                    <button key={cat} onClick={() => toggleCat(cat)} style={{
+                      padding: "5px 13px", borderRadius: 20, cursor: "pointer",
+                      border: `1.5px solid ${sel ? color : "#1e3a5f"}`,
+                      background: sel ? `${color}18` : "transparent",
+                      color: sel ? color : "#334155",
+                      fontSize: 12, fontWeight: sel ? 700 : 400,
+                      transition: "all 0.15s",
+                      boxShadow: sel ? `0 0 8px ${color}33` : "none"
+                    }}>
+                      {sel && <span style={{ marginRight: 4, fontSize: 9 }}>●</span>}
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 수입 카테고리 그룹 */}
+          {catsByType.수입.length > 0 && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#34d399", letterSpacing: "0.06em" }}>💰 수입</span>
+                <div style={{ flex: 1, height: 1, background: "#1e3a5f" }} />
+                <button
+                  onClick={() => setSelectedCats(p => [...new Set([...p, ...catsByType.수입])])}
+                  style={{ padding: "2px 8px", borderRadius: 5, cursor: "pointer", background: "transparent", color: "#475569", border: "1px solid #1e3a5f", fontSize: 10 }}
+                >전체 선택</button>
+                <button
+                  onClick={() => setSelectedCats(p => p.filter(c => !catsByType.수입.includes(c)))}
+                  style={{ padding: "2px 8px", borderRadius: 5, cursor: "pointer", background: "transparent", color: "#475569", border: "1px solid #1e3a5f", fontSize: 10 }}
+                >전체 해제</button>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                {catsByType.수입.map((cat) => {
+                  const colorIdx = allCategories.indexOf(cat) % PALETTE.length;
+                  const color = PALETTE[colorIdx];
+                  const sel = selectedCats.includes(cat);
+                  return (
+                    <button key={cat} onClick={() => toggleCat(cat)} style={{
+                      padding: "5px 13px", borderRadius: 20, cursor: "pointer",
+                      border: `1.5px solid ${sel ? color : "#1e3a5f"}`,
+                      background: sel ? `${color}18` : "transparent",
+                      color: sel ? color : "#334155",
+                      fontSize: 12, fontWeight: sel ? 700 : 400,
+                      transition: "all 0.15s",
+                      boxShadow: sel ? `0 0 8px ${color}33` : "none"
+                    }}>
+                      {sel && <span style={{ marginRight: 4, fontSize: 9 }}>●</span>}
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── 차트 ── */}
