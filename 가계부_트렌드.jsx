@@ -69,6 +69,7 @@ export default function App() {
   const [yMax,      setYMax]        = useState(null);
   const [dragOver,  setDragOver]    = useState(false);
   const [typeFilter, setTypeFilter] = useState("지출"); // 지출 | 수입 | 전체
+  const [viewMode, setViewMode] = useState("월별"); // 월별 | 누적
   const fileRef = useRef();
 
   /* ── 파일 파싱 ── */
@@ -135,7 +136,7 @@ export default function App() {
       return true;
     });
     const months = Array.from(new Set(filtered.map(t => t.ym))).sort();
-    return months.map(ym => {
+    const monthly = months.map(ym => {
       const obj = { month: ym, label: formatLabel(ym) };
       for (const cat of selectedCats) {
         obj[cat] = filtered
@@ -144,7 +145,18 @@ export default function App() {
       }
       return obj;
     });
-  }, [transactions, startMonth, endMonth, selectedCats, typeFilter]);
+    if (viewMode === "월별") return monthly;
+    // 누적 모드: 각 카테고리를 앞에서부터 합산
+    const acc = {};
+    return monthly.map(row => {
+      const obj = { month: row.month, label: row.label };
+      for (const cat of selectedCats) {
+        acc[cat] = (acc[cat] || 0) + (row[cat] || 0);
+        obj[cat] = acc[cat];
+      }
+      return obj;
+    });
+  }, [transactions, startMonth, endMonth, selectedCats, typeFilter, viewMode]);
 
   const toggleCat = (cat) =>
     setSelectedCats(p => p.includes(cat) ? p.filter(c => c !== cat) : [...p, cat]);
@@ -248,6 +260,11 @@ export default function App() {
             background: "linear-gradient(135deg, #38bdf8, #818cf8)",
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent"
           }}>가계부 트렌드 분석기</h1>
+          <span style={{
+            fontSize: 11, fontWeight: 700, color: "#334155",
+            border: "1px solid #1e3a5f", borderRadius: 6,
+            padding: "2px 7px", marginLeft: 4
+          }}>v1.1</span>
         </div>
         <button
           onClick={() => { setTransactions(null); setAllCategories([]); }}
@@ -264,7 +281,7 @@ export default function App() {
       <div style={{ position: "relative", zIndex: 1, padding: "20px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
 
         {/* ── 컨트롤 패널 ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14 }}>
 
           {/* 기간 설정 */}
           <div style={{ background: "#0a1628", border: "1px solid #0f2035", borderRadius: 14, padding: 18 }}>
@@ -313,6 +330,29 @@ export default function App() {
                     transition: "all 0.15s"
                   }}
                 >{t}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* 누적 / 월별 */}
+          <div style={{ background: "#0a1628", border: "1px solid #0f2035", borderRadius: 14, padding: 18 }}>
+            <p style={{ margin: "0 0 12px", fontSize: 12, color: "#475569", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              📈 합계 방식
+            </p>
+            <div style={{ display: "flex", gap: 6 }}>
+              {["월별", "누적"].map(m => (
+                <button
+                  key={m}
+                  onClick={() => setViewMode(m)}
+                  style={{
+                    flex: 1, padding: "7px 0", borderRadius: 8,
+                    border: `1px solid ${viewMode === m ? "#38bdf8" : "#1e3a5f"}`,
+                    background: viewMode === m ? "#0c2d47" : "transparent",
+                    color: viewMode === m ? "#38bdf8" : "#475569",
+                    cursor: "pointer", fontSize: 13, fontWeight: viewMode === m ? 700 : 400,
+                    transition: "all 0.15s"
+                  }}
+                >{m} 합계</button>
               ))}
             </div>
           </div>
@@ -415,7 +455,7 @@ export default function App() {
         <div style={{ background: "#0a1628", border: "1px solid #0f2035", borderRadius: 14, padding: "20px 24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
             <div>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#f1f5f9" }}>월별 금액 트렌드</h2>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#f1f5f9" }}>{viewMode} 금액 트렌드</h2>
               <p style={{ margin: "3px 0 0", fontSize: 12, color: "#334155" }}>
                 {startMonth} ~ {endMonth} · {chartData.length}개월
               </p>
