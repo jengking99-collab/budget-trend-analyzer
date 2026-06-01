@@ -85,11 +85,13 @@ export default function App() {
 
       const header = rows[0];
       const idx = (name) => header.indexOf(name);
-      const iDate   = idx("날짜");
-      const iCat    = idx("분류");
-      const iAmt    = idx("금액(원)");
-      const iType   = idx("수입/지출");
-      const iAsset  = idx("자산");
+      const iDate    = idx("날짜");
+      const iCat     = idx("분류");
+      const iAmt     = idx("금액(원)");
+      const iType    = idx("수입/지출");
+      const iAsset   = idx("자산");
+      const iSubCat  = idx("소분류");
+      const iMemo    = idx("내용");
 
       const parsed = [];
       const expendSet = new Set();
@@ -104,10 +106,12 @@ export default function App() {
         const cat   = row[iCat] || "기타";
         const amt   = Number(row[iAmt]) || 0;
         const type  = row[iType] || "";
-        const asset = iAsset >= 0 ? (row[iAsset] || "") : "";
+        const asset  = iAsset  >= 0 ? (row[iAsset]  || "") : "";
+        const subCat = iSubCat >= 0 ? (row[iSubCat] || "") : "";
+        const memo   = iMemo   >= 0 ? (row[iMemo]   || "") : "";
         if (type === "수입") incomeSet.add(cat);
         else expendSet.add(cat);
-        parsed.push({ ym, dateStr, cat, amt, type, asset });
+        parsed.push({ ym, dateStr, cat, amt, type, asset, subCat, memo });
       }
 
       const expendCats = Array.from(expendSet).sort();
@@ -274,7 +278,7 @@ export default function App() {
             fontSize: 11, fontWeight: 700, color: "#334155",
             border: "1px solid #1e3a5f", borderRadius: 6,
             padding: "2px 7px", marginLeft: 4
-          }}>v1.3.1</span>
+          }}>v1.3.2</span>
         </div>
         <button
           onClick={() => { setTransactions(null); setAllCategories([]); }}
@@ -692,14 +696,22 @@ export default function App() {
                 <div style={{ overflowX: "auto", overflowY: hasMore ? "auto" : "visible", maxHeight: hasMore ? 520 : "none" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
-                      <tr style={{ borderBottom: "1px solid #1e3a5f" }}>
-                        {["날짜", "자산", "카테고리", "금액", "구분"].map(h => (
-                          <th key={h} style={{
-                            padding: "8px 12px", textAlign: h === "금액" ? "right" : "left",
+                      <tr style={{ borderBottom: "1px solid #1e3a5f", position: "sticky", top: 0, background: "#0a1628", zIndex: 1 }}>
+                        {[
+                          { label: "날짜",   align: "left"  },
+                          { label: "자산",   align: "left"  },
+                          { label: "카테고리", align: "left" },
+                          { label: "소분류", align: "left"  },
+                          { label: "내용",   align: "left"  },
+                          { label: "금액",   align: "right" },
+                          { label: "구분",   align: "left"  },
+                        ].map(({ label, align }) => (
+                          <th key={label} style={{
+                            padding: "8px 12px", textAlign: align,
                             color: "#475569", fontWeight: 700, fontSize: 11,
                             letterSpacing: "0.06em", textTransform: "uppercase",
                             whiteSpace: "nowrap"
-                          }}>{h}</th>
+                          }}>{label}</th>
                         ))}
                       </tr>
                     </thead>
@@ -714,7 +726,7 @@ export default function App() {
                           onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "#060d1844"}
                         >
                           <td style={{ padding: "9px 12px", color: "#94a3b8", whiteSpace: "nowrap" }}>{t.dateStr}</td>
-                          <td style={{ padding: "9px 12px", color: "#64748b" }}>{t.asset || "—"}</td>
+                          <td style={{ padding: "9px 12px", color: "#64748b", whiteSpace: "nowrap" }}>{t.asset || "—"}</td>
                           <td style={{ padding: "9px 12px" }}>
                             <span style={{
                               display: "inline-block", padding: "2px 9px",
@@ -722,6 +734,10 @@ export default function App() {
                               background: `${color}18`, color, border: `1px solid ${color}33`
                             }}>{t.cat}</span>
                           </td>
+                          <td style={{ padding: "9px 12px", color: "#64748b" }}>{t.subCat || "—"}</td>
+                          <td style={{ padding: "9px 12px", color: "#94a3b8", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                            title={t.memo}
+                          >{t.memo || "—"}</td>
                           <td style={{ padding: "9px 12px", textAlign: "right", fontWeight: 700, color: "#e2e8f0", whiteSpace: "nowrap" }}>
                             {t.amt.toLocaleString()}원
                           </td>
@@ -739,8 +755,8 @@ export default function App() {
                     </tbody>
                     <tfoot>
                       <tr style={{ borderTop: "2px solid #1e3a5f" }}>
-                        <td colSpan={3} style={{ padding: "10px 12px", color: "#475569", fontSize: 12, fontWeight: 700 }}>
-                          총 {rows.length}건
+                        <td colSpan={5} style={{ padding: "10px 12px", color: "#475569", fontSize: 12, fontWeight: 700 }}>
+                          총 {allRows.length}건{hasMore ? ` (상위 ${MAX_ROWS}건 표시)` : ""}
                         </td>
                         <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 800, color, fontSize: 14 }}>
                           {total.toLocaleString()}원
