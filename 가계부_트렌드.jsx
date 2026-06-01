@@ -274,7 +274,7 @@ export default function App() {
             fontSize: 11, fontWeight: 700, color: "#334155",
             border: "1px solid #1e3a5f", borderRadius: 6,
             padding: "2px 7px", marginLeft: 4
-          }}>v1.3</span>
+          }}>v1.3.1</span>
         </div>
         <button
           onClick={() => { setTransactions(null); setAllCategories([]); }}
@@ -638,11 +638,14 @@ export default function App() {
         )}
         {/* ── 일별 상세 테이블 ── */}
         {selectedPoint && (() => {
+          const MAX_ROWS = 30;
           const { ym, cat } = selectedPoint;
-          const rows = transactions
+          const allRows = transactions
             .filter(t => t.ym === ym && t.cat === cat)
             .sort((a, b) => a.dateStr.localeCompare(b.dateStr));
-          const total = rows.reduce((s, t) => s + t.amt, 0);
+          const rows = allRows.slice(0, MAX_ROWS);
+          const hasMore = allRows.length > MAX_ROWS;
+          const total = allRows.reduce((s, t) => s + t.amt, 0);
           const color = PALETTE[allCategories.indexOf(cat) % PALETTE.length];
           const [y, m] = ym.split("-");
           return (
@@ -661,7 +664,12 @@ export default function App() {
                   <span style={{
                     fontSize: 11, padding: "2px 8px", borderRadius: 10,
                     background: `${color}22`, color, border: `1px solid ${color}44`
-                  }}>{rows.length}건</span>
+                  }}>{allRows.length}건</span>
+                  {hasMore && (
+                    <span style={{ fontSize: 11, color: "#f59e0b", background: "#f59e0b18", border: "1px solid #f59e0b44", borderRadius: 10, padding: "2px 8px" }}>
+                      상위 {MAX_ROWS}건 표시
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 600 }}>
@@ -681,7 +689,7 @@ export default function App() {
               {rows.length === 0 ? (
                 <p style={{ color: "#334155", textAlign: "center", padding: "24px 0" }}>데이터가 없습니다</p>
               ) : (
-                <div style={{ overflowX: "auto" }}>
+                <div style={{ overflowX: "auto", overflowY: hasMore ? "auto" : "visible", maxHeight: hasMore ? 520 : "none" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
                       <tr style={{ borderBottom: "1px solid #1e3a5f" }}>
