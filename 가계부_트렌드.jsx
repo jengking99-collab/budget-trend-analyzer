@@ -62,6 +62,7 @@ function CustomTooltip({ active, payload, label }) {
 export default function App() {
   const [transactions, setTransactions] = useState(null);
   const [allCategories, setAllCategories] = useState([]);
+  const [catsByType, setCatsByType] = useState({ 지출: [], 수입: [] });
   const [selectedCats, setSelectedCats] = useState([]);
   const [startMonth, setStartMonth] = useState("");
   const [endMonth,   setEndMonth]   = useState("");
@@ -70,6 +71,8 @@ export default function App() {
   const [dragOver,  setDragOver]    = useState(false);
   const [typeFilter, setTypeFilter] = useState("지출"); // 지출 | 수입 | 전체
   const [viewMode, setViewMode] = useState("월별"); // 월별 | 누적
+  const [selectedPoint, setSelectedPoint] = useState(null); // { ym, cat }
+  const detailRef = useRef(null);
   const fileRef = useRef();
 
   /* ── 파일 파싱 ── */
@@ -86,35 +89,42 @@ export default function App() {
       const iCat    = idx("분류");
       const iAmt    = idx("금액(원)");
       const iType   = idx("수입/지출");
+      const iAsset  = idx("자산");
 
       const parsed = [];
-      const catSet = new Set();
+      const expendSet = new Set();
+      const incomeSet = new Set();
 
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         if (!row[iDate] || typeof row[iDate] !== "number") continue;
-        const date = excelSerialToDate(row[iDate]);
-        const ym   = toYearMonth(date);
-        const cat  = row[iCat] || "기타";
-        const amt  = Number(row[iAmt]) || 0;
-        const type = row[iType] || "";
-        catSet.add(cat);
-        parsed.push({ ym, cat, amt, type });
+        const date  = excelSerialToDate(row[iDate]);
+        const ym    = toYearMonth(date);
+        const dateStr = `${date.getUTCFullYear()}-${String(date.getUTCMonth()+1).padStart(2,"0")}-${String(date.getUTCDate()).padStart(2,"0")}`;
+        const cat   = row[iCat] || "기타";
+        const amt   = Number(row[iAmt]) || 0;
+        const type  = row[iType] || "";
+        const asset = iAsset >= 0 ? (row[iAsset] || "") : "";
+        if (type === "수입") incomeSet.add(cat);
+        else expendSet.add(cat);
+        parsed.push({ ym, dateStr, cat, amt, type, asset });
       }
 
-      const cats = Array.from(catSet).sort();
+      const expendCats = Array.from(expendSet).sort();
+      const incomeCats = Array.from(incomeSet).sort();
+      const cats = [...expendCats, ...incomeCats.filter(c => !expendSet.has(c))];
       const yms  = parsed.map(t => t.ym).sort();
 
       setTransactions(parsed);
       setAllCategories(cats);
-      // 기본 선택: 상위 5개 카테고리 (금액 합 기준)
+      setCatsByType({ 지출: expendCats, 수입: incomeCats });
+      // 기본 선택: 지출 카테고리 중 상위 5개 (금액 합 기준)
       const catTotals = {};
       parsed.forEach(t => { catTotals[t.cat] = (catTotals[t.cat] || 0) + t.amt; });
-      const top5 = [...cats].sort((a,b) => (catTotals[b]||0) - (catTotals[a]||0)).slice(0, 5);
+      const top5 = [...expendCats].sort((a,b) => (catTotals[b]||0) - (catTotals[a]||0)).slice(0, 5);
       setSelectedCats(top5);
       setStartMonth(yms[0] || "");
       setEndMonth(yms[yms.length - 1] || "");
-      setAllCategories(cats.sort());
     };
     reader.readAsBinaryString(file);
   }, []);
@@ -264,7 +274,7 @@ export default function App() {
             fontSize: 11, fontWeight: 700, color: "#334155",
             border: "1px solid #1e3a5f", borderRadius: 6,
             padding: "2px 7px", marginLeft: 4
-          }}>v1.1</span>
+          }}>v1.3</span>
         </div>
         <button
           onClick={() => { setTransactions(null); setAllCategories([]); }}
@@ -408,47 +418,92 @@ export default function App() {
             <div style={{ display: "flex", gap: 6 }}>
               <button
                 onClick={() => setSelectedCats([...allCategories])}
-                style={{
-                  padding: "4px 10px", borderRadius: 6, cursor: "pointer",
-                  background: "#0c2d47", color: "#38bdf8",
-                  border: "1px solid #1e3a5f", fontSize: 11
-                }}
+                style={{ padding: "4px 10px", borderRadius: 6, cursor: "pointer", background: "#0c2d47", color: "#38bdf8", border: "1px solid #1e3a5f", fontSize: 11 }}
               >전체 선택</button>
               <button
                 onClick={() => setSelectedCats([])}
-                style={{
-                  padding: "4px 10px", borderRadius: 6, cursor: "pointer",
-                  background: "#1a0a0a", color: "#f87171",
-                  border: "1px solid #3f1414", fontSize: 11
-                }}
+                style={{ padding: "4px 10px", borderRadius: 6, cursor: "pointer", background: "#1a0a0a", color: "#f87171", border: "1px solid #3f1414", fontSize: 11 }}
               >전체 해제</button>
             </div>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-            {allCategories.map((cat) => {
-              const colorIdx = allCategories.indexOf(cat) % PALETTE.length;
-              const color = PALETTE[colorIdx];
-              const sel = selectedCats.includes(cat);
-              return (
+
+          {/* 지출 카테고리 그룹 */}
+          {catsByType.지출.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#f87171", letterSpacing: "0.06em" }}>💸 지출</span>
+                <div style={{ flex: 1, height: 1, background: "#1e3a5f" }} />
                 <button
-                  key={cat}
-                  onClick={() => toggleCat(cat)}
-                  style={{
-                    padding: "5px 13px", borderRadius: 20, cursor: "pointer",
-                    border: `1.5px solid ${sel ? color : "#1e3a5f"}`,
-                    background: sel ? `${color}18` : "transparent",
-                    color: sel ? color : "#334155",
-                    fontSize: 12, fontWeight: sel ? 700 : 400,
-                    transition: "all 0.15s",
-                    boxShadow: sel ? `0 0 8px ${color}33` : "none"
-                  }}
-                >
-                  {sel && <span style={{ marginRight: 4, fontSize: 9 }}>●</span>}
-                  {cat}
-                </button>
-              );
-            })}
-          </div>
+                  onClick={() => setSelectedCats(p => [...new Set([...p, ...catsByType.지출])])}
+                  style={{ padding: "2px 8px", borderRadius: 5, cursor: "pointer", background: "transparent", color: "#475569", border: "1px solid #1e3a5f", fontSize: 10 }}
+                >전체 선택</button>
+                <button
+                  onClick={() => setSelectedCats(p => p.filter(c => !catsByType.지출.includes(c)))}
+                  style={{ padding: "2px 8px", borderRadius: 5, cursor: "pointer", background: "transparent", color: "#475569", border: "1px solid #1e3a5f", fontSize: 10 }}
+                >전체 해제</button>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                {catsByType.지출.map((cat) => {
+                  const colorIdx = allCategories.indexOf(cat) % PALETTE.length;
+                  const color = PALETTE[colorIdx];
+                  const sel = selectedCats.includes(cat);
+                  return (
+                    <button key={cat} onClick={() => toggleCat(cat)} style={{
+                      padding: "5px 13px", borderRadius: 20, cursor: "pointer",
+                      border: `1.5px solid ${sel ? color : "#1e3a5f"}`,
+                      background: sel ? `${color}18` : "transparent",
+                      color: sel ? color : "#334155",
+                      fontSize: 12, fontWeight: sel ? 700 : 400,
+                      transition: "all 0.15s",
+                      boxShadow: sel ? `0 0 8px ${color}33` : "none"
+                    }}>
+                      {sel && <span style={{ marginRight: 4, fontSize: 9 }}>●</span>}
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* 수입 카테고리 그룹 */}
+          {catsByType.수입.length > 0 && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#34d399", letterSpacing: "0.06em" }}>💰 수입</span>
+                <div style={{ flex: 1, height: 1, background: "#1e3a5f" }} />
+                <button
+                  onClick={() => setSelectedCats(p => [...new Set([...p, ...catsByType.수입])])}
+                  style={{ padding: "2px 8px", borderRadius: 5, cursor: "pointer", background: "transparent", color: "#475569", border: "1px solid #1e3a5f", fontSize: 10 }}
+                >전체 선택</button>
+                <button
+                  onClick={() => setSelectedCats(p => p.filter(c => !catsByType.수입.includes(c)))}
+                  style={{ padding: "2px 8px", borderRadius: 5, cursor: "pointer", background: "transparent", color: "#475569", border: "1px solid #1e3a5f", fontSize: 10 }}
+                >전체 해제</button>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                {catsByType.수입.map((cat) => {
+                  const colorIdx = allCategories.indexOf(cat) % PALETTE.length;
+                  const color = PALETTE[colorIdx];
+                  const sel = selectedCats.includes(cat);
+                  return (
+                    <button key={cat} onClick={() => toggleCat(cat)} style={{
+                      padding: "5px 13px", borderRadius: 20, cursor: "pointer",
+                      border: `1.5px solid ${sel ? color : "#1e3a5f"}`,
+                      background: sel ? `${color}18` : "transparent",
+                      color: sel ? color : "#334155",
+                      fontSize: 12, fontWeight: sel ? 700 : 400,
+                      transition: "all 0.15s",
+                      boxShadow: sel ? `0 0 8px ${color}33` : "none"
+                    }}>
+                      {sel && <span style={{ marginRight: 4, fontSize: 9 }}>●</span>}
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── 차트 ── */}
@@ -524,7 +579,16 @@ export default function App() {
                       stroke={color}
                       strokeWidth={2}
                       dot={{ r: 2.5, fill: color, strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: color, stroke: "#060d18", strokeWidth: 2 }}
+                      activeDot={{
+                        r: 7, fill: color, stroke: "#060d18", strokeWidth: 2,
+                        cursor: "pointer",
+                        onClick: (e, payload) => {
+                          const ym = payload?.payload?.month;
+                          if (!ym) return;
+                          setSelectedPoint({ ym, cat });
+                          setTimeout(() => detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                        }
+                      }}
                       connectNulls
                     />
                   );
@@ -572,6 +636,117 @@ export default function App() {
             })}
           </div>
         )}
+        {/* ── 일별 상세 테이블 ── */}
+        {selectedPoint && (() => {
+          const { ym, cat } = selectedPoint;
+          const rows = transactions
+            .filter(t => t.ym === ym && t.cat === cat)
+            .sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+          const total = rows.reduce((s, t) => s + t.amt, 0);
+          const color = PALETTE[allCategories.indexOf(cat) % PALETTE.length];
+          const [y, m] = ym.split("-");
+          return (
+            <div ref={detailRef} style={{
+              background: "#0a1628", border: `1px solid ${color}44`,
+              borderRadius: 14, padding: "20px 24px",
+              boxShadow: `0 0 32px ${color}11`
+            }}>
+              {/* 테이블 헤더 */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: color, display: "inline-block" }} />
+                  <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#f1f5f9" }}>
+                    {y}년 {m}월 · <span style={{ color }}>{cat}</span> 일별 내역
+                  </h2>
+                  <span style={{
+                    fontSize: 11, padding: "2px 8px", borderRadius: 10,
+                    background: `${color}22`, color, border: `1px solid ${color}44`
+                  }}>{rows.length}건</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 13, color: "#94a3b8", fontWeight: 600 }}>
+                    합계: <span style={{ color }}>{total.toLocaleString()}원</span>
+                  </span>
+                  <button
+                    onClick={() => setSelectedPoint(null)}
+                    style={{
+                      padding: "5px 12px", borderRadius: 8, cursor: "pointer",
+                      background: "#0f2035", color: "#64748b",
+                      border: "1px solid #1e3a5f", fontSize: 12
+                    }}
+                  >✕ 닫기</button>
+                </div>
+              </div>
+
+              {rows.length === 0 ? (
+                <p style={{ color: "#334155", textAlign: "center", padding: "24px 0" }}>데이터가 없습니다</p>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid #1e3a5f" }}>
+                        {["날짜", "자산", "카테고리", "금액", "구분"].map(h => (
+                          <th key={h} style={{
+                            padding: "8px 12px", textAlign: h === "금액" ? "right" : "left",
+                            color: "#475569", fontWeight: 700, fontSize: 11,
+                            letterSpacing: "0.06em", textTransform: "uppercase",
+                            whiteSpace: "nowrap"
+                          }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((t, i) => (
+                        <tr key={i} style={{
+                          borderBottom: "1px solid #0f2035",
+                          background: i % 2 === 0 ? "transparent" : "#060d1844",
+                          transition: "background 0.1s"
+                        }}
+                          onMouseEnter={e => e.currentTarget.style.background = `${color}0d`}
+                          onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "transparent" : "#060d1844"}
+                        >
+                          <td style={{ padding: "9px 12px", color: "#94a3b8", whiteSpace: "nowrap" }}>{t.dateStr}</td>
+                          <td style={{ padding: "9px 12px", color: "#64748b" }}>{t.asset || "—"}</td>
+                          <td style={{ padding: "9px 12px" }}>
+                            <span style={{
+                              display: "inline-block", padding: "2px 9px",
+                              borderRadius: 10, fontSize: 11, fontWeight: 600,
+                              background: `${color}18`, color, border: `1px solid ${color}33`
+                            }}>{t.cat}</span>
+                          </td>
+                          <td style={{ padding: "9px 12px", textAlign: "right", fontWeight: 700, color: "#e2e8f0", whiteSpace: "nowrap" }}>
+                            {t.amt.toLocaleString()}원
+                          </td>
+                          <td style={{ padding: "9px 12px" }}>
+                            <span style={{
+                              display: "inline-block", padding: "2px 8px",
+                              borderRadius: 6, fontSize: 11, fontWeight: 600,
+                              background: t.type === "수입" ? "#06402022" : "#3f141422",
+                              color: t.type === "수입" ? "#34d399" : "#f87171",
+                              border: `1px solid ${t.type === "수입" ? "#34d39944" : "#f8717144"}`
+                            }}>{t.type || "—"}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ borderTop: "2px solid #1e3a5f" }}>
+                        <td colSpan={3} style={{ padding: "10px 12px", color: "#475569", fontSize: 12, fontWeight: 700 }}>
+                          총 {rows.length}건
+                        </td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontWeight: 800, color, fontSize: 14 }}>
+                          {total.toLocaleString()}원
+                        </td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
       </div>
     </div>
   );
